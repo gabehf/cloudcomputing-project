@@ -1,0 +1,8 @@
+{
+  "name": "musicserver",
+  "version": "1.0.0",
+  "author": "Group 7",
+  "dependencies": {
+    "squirrelly": "^8.0.8"
+  }
+}
