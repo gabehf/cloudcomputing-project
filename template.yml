@@ -65,6 +65,55 @@ Metadata:
       embeds: []
       isassociatedwith:
         - 80500ba5-1749-47bc-8cfa-3e9a0f0d0572
+    d701293c-6494-4f90-b758-31f57f52e379:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -190
+        'y': 250
+      z: 0
+      embeds: []
+    7d399dae-9f6c-4026-9286-d33113777902:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -360
+        'y': 250
+      z: 0
+      embeds: []
+    b27ea063-d0ac-40c1-8c49-9147a53ea072:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -270
+        'y': 380
+      z: 0
+      embeds: []
+    88fe53b7-5e96-416e-ad00-9ebe8d04269a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -200
+        'y': 140
+      z: 0
+      embeds: []
+      dependson:
+        - 80500ba5-1749-47bc-8cfa-3e9a0f0d0572
+    badaa010-8776-4159-8720-9ee8be16806e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 80
+        'y': 380
+      z: 0
+      embeds: []
+      isassociatedwith:
+        - 80500ba5-1749-47bc-8cfa-3e9a0f0d0572
 Resources:
   URL:
     Type: 'AWS::Lambda::Url'
@@ -85,7 +134,7 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Code:
-        S3Bucket: ${bucketname}
+        S3Bucket: '${bucketname}'
         S3Key: index.zip
       Role: !GetAtt SiteRole.Arn
     Metadata:
@@ -148,10 +197,70 @@ Resources:
     Type: 'AWS::Lambda::Permission'
     Properties:
       Action: 'lambda:invokeFunctionUrl'
-      FunctionUrlAuthType: 'NONE'
+      FunctionUrlAuthType: NONE
       FunctionName: !Ref Server
       Principal: '*'
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 161bd476-b869-4c2e-968b-05cd0b73052f
-
+  MusicAPI:
+    Type: 'AWS::ApiGatewayV2::Api'
+    Properties:
+      Target: !GetAtt Server.Arn
+      Name: MusicAPI
+      ProtocolType: HTTP
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d701293c-6494-4f90-b758-31f57f52e379
+  HomeRoute:
+    Type: 'AWS::ApiGatewayV2::Route'
+    Properties:
+      ApiId: !Ref MusicAPI
+      RouteKey: Get /
+      Target: !Join 
+        - /
+        - - integrations
+          - !Ref APIIntegration
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7d399dae-9f6c-4026-9286-d33113777902
+    DependsOn:
+      - MusicAPI
+  AddRoute:
+    Type: 'AWS::ApiGatewayV2::Route'
+    Properties:
+      ApiId: !Ref MusicAPI
+      RouteKey: POST /add
+      Target: !Join 
+        - /
+        - - integrations
+          - !Ref APIIntegration
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b27ea063-d0ac-40c1-8c49-9147a53ea072
+    DependsOn:
+      - MusicAPI
+  APIIntegration:
+    Type: 'AWS::ApiGatewayV2::Integration'
+    Properties:
+      ApiId: !Ref MusicAPI
+      IntegrationType: AWS_PROXY
+      PayloadFormatVersion: 2.0
+      IntegrationUri:
+        'Fn::Sub': >-
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Server.Arn}/invocations
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 88fe53b7-5e96-416e-ad00-9ebe8d04269a
+    DependsOn:
+      - Server
+  APIPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref Server
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MusicAPI}/*/*/'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: badaa010-8776-4159-8720-9ee8be16806e
