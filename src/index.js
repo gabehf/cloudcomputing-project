@@ -3,21 +3,6 @@ const fs = require('fs')
 const AWS = require('aws-sdk');
 const docClient = new AWS.DynamoDB.DocumentClient();
 
-// let data = {
-//     songs: [
-//         {
-//             Title: "Well Enough",
-//             Artist: "Future Teens",
-//             File: "this.mp3"
-//         },
-//         {
-//             Title: "BYOB",
-//             Artist: "Future Teens",
-//             File: "that.mp3"
-//         },
-//     ]
-// }
-
 const params = {
     TableName: 'MusicTable'
 }
@@ -57,10 +42,14 @@ const template = `
 <body>
     <div class="content">
         <h1>Illegal Music Site</h1>
-        <form>
-            <input type="text" placeholder="Title" />
-            <input type="text" placeholder="Artist" />
-            <input type="File" />
+        <form onSubmit="formSubmit()" name="addForm">
+            <label for="Title">Title</label>
+            <input type="text" id="Title" name="Title" placeholder="Title" />
+            <label for="Artist">Artist</label>
+            <input type="text" id="Artist" name="Artist" placeholder="Artist" />
+            <label for="File">File</label>
+            <input type="File" id="File" name="File"/>
+            <input type="submit"/>
         </form>
         <div>
             {{@each(it.songs) => s, i}}
@@ -72,7 +61,22 @@ const template = `
             </div>
             {{/each}}
         </div>
-    </div>  
+    </div>
+    <script>
+    async function formSubmit() {
+        let title = document.getElementById("Title").value
+        let artist = document.getElementById("Artist").value
+    
+        let resp = await fetch("/add", {
+            method: 'POST',
+            body: JSON.stringify({
+                Artist: artist,
+                Title: title
+            })
+        })
+        window.location.reload()
+    }
+    </script>
 </body>
 <style>
     body {
