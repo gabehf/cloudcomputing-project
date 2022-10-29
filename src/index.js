@@ -8,16 +8,39 @@ const params = {
 }
 
 exports.handler = async (e, ctx) => {
-    let scan = await docClient.scan(params).promise()
-    let data = {
-        songs: []
-    }
-    do {
-        scan.Items.forEach((i) => data.songs.push(i))
-        params.ExclusiveStartKey = scan.LastEvaluatedKey
-    } while (typeof scan.LastEvaluatedKey != 'undefined')
     console.log(e)
-    return response(sqrl.render(template, data))
+    if (e.requestContext.http.method == "POST" && e.requestContext.http.path == "/add") {
+        // handle POST /add
+        let data = JSON.parse(e.body) // body content sent as JSON
+        docClient.put({
+            TableName: 'MusicTable',
+            Item: {
+                id: `${data.Title}-${data.Artist}`,
+                Title: data.Title,
+                Artist: data.Artist,
+                File: 'notyetimplemented.mp3'
+            }
+        }, (err, d) => {
+            if (err) {
+                console.log(err)
+            } else {
+                console.log(d)
+            }
+        })
+        return JSON.stringify({
+            success: true
+        })
+    } else {
+        let scan = await docClient.scan(params).promise()
+        let data = {
+            songs: []
+        }
+        do {
+            scan.Items.forEach((i) => data.songs.push(i))
+            params.ExclusiveStartKey = scan.LastEvaluatedKey
+        } while (typeof scan.LastEvaluatedKey != 'undefined')
+        return response(sqrl.render(template, data))
+    }
 }
 
 function response(html){
@@ -42,14 +65,14 @@ const template = `
 <body>
     <div class="content">
         <h1>Illegal Music Site</h1>
-        <form onSubmit="formSubmit()" name="addForm">
+        <form id="addSongForm">
             <label for="Title">Title</label>
             <input type="text" id="Title" name="Title" placeholder="Title" />
             <label for="Artist">Artist</label>
             <input type="text" id="Artist" name="Artist" placeholder="Artist" />
             <label for="File">File</label>
             <input type="File" id="File" name="File"/>
-            <input type="submit"/>
+            <button id="formSubmit">Submit</button>
         </form>
         <div>
             {{@each(it.songs) => s, i}}
@@ -63,7 +86,9 @@ const template = `
         </div>
     </div>
     <script>
-    async function formSubmit() {
+    document.getElementById("formSubmit").addEventListener("click", formSubmit)
+    async function formSubmit(e) {
+        e.preventDefault()
         let title = document.getElementById("Title").value
         let artist = document.getElementById("Artist").value
     
@@ -74,6 +99,10 @@ const template = `
                 Title: title
             })
         })
+        // console.log({
+        //         Artist: artist,
+        //         Title: title
+        //     })
         window.location.reload()
     }
     </script>
