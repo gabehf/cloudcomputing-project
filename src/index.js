@@ -1,48 +1,144 @@
 var sqrl = require('squirrelly')
 const fs = require('fs')
 const AWS = require('aws-sdk');
+const busboy = require('busboy')
 const docClient = new AWS.DynamoDB.DocumentClient();
+const s3 = new AWS.S3()
 
+// load html template
+const template = fs.readFileSync('./index.html').toString()
+
+// parameter for full table scan
 const params = {
     TableName: 'MusicTable'
 }
 
 exports.handler = async (e, ctx) => {
+
+    // log every request into CloudWatch
     console.log(e)
+
+    // handle 'POST /add' for adding songs to DB
     if (e.requestContext.http.method == "POST" && e.requestContext.http.path == "/add") {
-        // handle POST /add
-        let data = JSON.parse(e.body) // body content sent as JSON
-        docClient.put({
-            TableName: 'MusicTable',
-            Item: {
-                id: `${data.Title}-${data.Artist}`,
-                Title: data.Title,
-                Artist: data.Artist,
-                File: 'notyetimplemented.mp3'
-            }
-        }, (err, d) => {
-            if (err) {
-                console.log(err)
-            } else {
-                console.log(d)
-            }
+
+        // decode base64 body (if necessary)
+        if (e.isBase64Encoded == true) {
+            let raw64 = e.body
+            let buff = Buffer.from(raw64, 'base64')
+            e.body = buff.toString('ascii')
+        }
+
+        // get content headers
+        var contentType = e.headers['Content-Type'] || e.headers['content-type'];
+
+        // the form object
+        let result = {
+            filename: "",
+            Title: "",
+            Artist: ""
+        }
+        let data = null
+
+        // to store file info so it can be sent to s3
+        let fileinfo = {}
+
+        // busboy reads and decodes the event body (form data)
+        var bb = busboy({ headers: { 'content-type': contentType }})
+        bb.on('file', function (field, file, info) {
+            // handle a file in the form
+
+            // create the file name
+            let r = Math.floor((Math.random() * 10000000000000000)).toString(36)
+            result.filename = 'songs/' + r + '.mp3'
+
+            // get file info (mime type, etc)
+            fileinfo = info
+
+            // get file data
+            file.on('data', (d) => {
+                if (data === null) {
+                    data = d
+                } else {
+                    data = Buffer.concat([data, d])
+                }
+
+                // need file.resume(), otherwise .on('finish') will not fire.
+                // may have unintended side effects if the file is too large.
+                file.resume()
+            })
+
         })
-        return JSON.stringify({
-            success: true
+        // handle non-file fields in form
+        .on('field', (fieldname, val) => {
+            result[fieldname] = val
         })
+        .on('finish', () => {  
+            // when the file is completely processed
+
+            // s3 paramters
+            let params = {
+                Bucket: 'group7-code-bucket-73h3fdsa', 
+                Key: result.filename, 
+                Body: data,
+                ContentType: fileinfo.mimeType,
+                ContentEncoding: fileinfo.encoding,
+                ACL: 'public-read',
+            }
+            let options = {partSize: 15 * 1024 * 1024, queueSize: 10}   // 5 MB
+
+            // upload the file to s3
+            s3.upload(params, options, (err, data) => {
+                console.log(err, data)
+            }).on('httpUploadProgress', (evt) => {
+                console.log(evt)
+            }).send((err, data) => {
+                console.log(err, data)
+            })
+
+            // put the song entry into dynamodb
+            docClient.put({
+                TableName: 'MusicTable',
+                Item: {
+                    id: `${result.Title}-${result.Artist}`,
+                    Title: result.Title,
+                    Artist: result.Artist,
+                    File: `https://group7-code-bucket-73h3fdsa.s3.amazonaws.com/${result.filename}`
+                }
+            }, (err, d) => {
+                if (err) {
+                    console.log(err)
+                } else {
+                    console.log(d)
+                }
+            })
+        })
+        // form parsing error
+        .on('error', err => {
+            console.log('failed', err);
+        })
+        // finish form decode
+        bb.end(e.body)
     } else {
+        // handle default 'GET /' requests
+
+        // scan whole MusicTable
         let scan = await docClient.scan(params).promise()
         let data = {
             songs: []
         }
+
+        // map scan into data object songs array
         do {
             scan.Items.forEach((i) => data.songs.push(i))
             params.ExclusiveStartKey = scan.LastEvaluatedKey
         } while (typeof scan.LastEvaluatedKey != 'undefined')
+
+        // render html template with songs
         return response(sqrl.render(template, data))
     }
 }
 
+// returns standard HTML response (for serving template)
 function response(html){
     return {
         "statusCode": 200,
@@ -52,72 +148,3 @@ function response(html){
         }
     }
 }
-
-const template = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test</title>
-</head>
-<body>
-    <div class="content">
-        <h1>Illegal Music Site</h1>
-        <form id="addSongForm">
-            <label for="Title">Title</label>
-            <input type="text" id="Title" name="Title" placeholder="Title" />
-            <label for="Artist">Artist</label>
-            <input type="text" id="Artist" name="Artist" placeholder="Artist" />
-            <label for="File">File</label>
-            <input type="File" id="File" name="File"/>
-            <button id="formSubmit">Submit</button>
-        </form>
-        <div>
-            {{@each(it.songs) => s, i}}
-            <div class="song">
-                <p>{{s.Title}} - {{s.Artist}}</p>
-                <audio controls>
-                    <source src="{{s.File}}" type="audio/mpeg">
-                </audio>
-            </div>
-            {{/each}}
-        </div>
-    </div>
-    <script>
-    document.getElementById("formSubmit").addEventListener("click", formSubmit)
-    async function formSubmit(e) {
-        e.preventDefault()
-        let title = document.getElementById("Title").value
-        let artist = document.getElementById("Artist").value
-    
-        let resp = await fetch("/add", {
-            method: 'POST',
-            body: JSON.stringify({
-                Artist: artist,
-                Title: title
-            })
-        })
-        // console.log({
-        //         Artist: artist,
-        //         Title: title
-        //     })
-        window.location.reload()
-    }
-    </script>
-</body>
-<style>
-    body {
-        font-family: Verdana, Geneva, Tahoma, sans-serif;
-    }
-    h1 {
-        text-align: center;
-        font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
-    }
-    .content {
-        width: 60%;
-    }
-</style>
-</html>
-`

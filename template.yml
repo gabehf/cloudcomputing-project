@@ -65,6 +65,17 @@ Metadata:
       embeds: []
       isassociatedwith:
         - 80500ba5-1749-47bc-8cfa-3e9a0f0d0572
+    6a40fbab-730f-4fd4-9647-36cf479e94c2:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 340
+        'y': 60
+      z: 0
+      embeds: []
+      isassociatedwith:
+        - 13c58f7b-60f4-4942-8731-d2b12e056e39
 Resources:
   URL:
     Type: 'AWS::Lambda::Url'
@@ -85,9 +96,12 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Code:
-        S3Bucket: ${bucketname}
+        S3Bucket: '${bucketname}'
         S3Key: index.zip
-      Role: !GetAtt SiteRole.Arn
+      Role: !GetAtt 
+        - SiteRole
+        - Arn
+      MemorySize: 512
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 80500ba5-1749-47bc-8cfa-3e9a0f0d0572
@@ -148,9 +162,30 @@ Resources:
     Type: 'AWS::Lambda::Permission'
     Properties:
       Action: 'lambda:invokeFunctionUrl'
-      FunctionUrlAuthType: 'NONE'
+      FunctionUrlAuthType: NONE
       FunctionName: !Ref Server
       Principal: '*'
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 161bd476-b869-4c2e-968b-05cd0b73052f
+  MusicBucketAllAccess:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: MusicBucketAllAccess
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: SIDALLOWALLS3
+            Effect: Allow
+            Action:
+              - 's3:*'
+            Resource: '*'
+          - Sid: SIDCODEBUCKET
+            Effect: Allow
+            Action: 's3:*'
+            Resource: 'arn:aws:s3:::group7-code-bucket-73h3fdsa'
+      Roles:
+        - !Ref SiteRole
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6a40fbab-730f-4fd4-9647-36cf479e94c2

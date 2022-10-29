@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test</title>
+</head>
+<body>
+    <div class="content">
+        <h1>Illegal Music Site</h1>
+        <form id="addSongForm">
+            <label for="Title">Title</label>
+            <input type="text" id="Title" name="Title" placeholder="Title" />
+            <label for="Artist">Artist</label>
+            <input type="text" id="Artist" name="Artist" placeholder="Artist" />
+            <label for="File">Mp3 File</label>
+            <input type="file" id="File" name="File"/>
+            <button id="formSubmit">Submit</button>
+        </form>
+        <div>
+            {{@each(it.songs) => s, i}}
+            <div class="song">
+                <p>{{s.Title}} - {{s.Artist}}</p>
+                <audio controls>
+                    <source src="{{s.File}}" type="audio/mpeg">
+                </audio>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+    <script>
+    document.getElementById("formSubmit").addEventListener("click", formSubmit)
+    async function formSubmit(e) {
+        e.preventDefault()
+        let file = document.getElementById("File").files[0]
+        let title = document.getElementById("Title").value
+        let artist = document.getElementById("Artist").value
+
+        let data = new FormData()
+        data.append('File', file)
+        data.append('Title', title)
+        data.append('Artist', artist)
+    
+        let resp = await fetch("/add", {
+            method: 'POST',
+            body: data
+        }).then((r) => {
+            console.log(r)
+        }
+        )
+    }
+    </script>
+</body>
+<style>
+    body {
+        font-family: Verdana, Geneva, Tahoma, sans-serif;
+    }
+    h1 {
+        text-align: center;
+        font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    .content {
+        width: 60%;
+    }
+</style>
+</html>
